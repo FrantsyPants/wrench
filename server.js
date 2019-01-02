@@ -11,6 +11,7 @@ app.get("/", (req, res) => {
 
 app.get("/test", (req, res) => {
   res.status(200).send("Test");
+  console.log("Testing123");
 });
 
 const port = process.env.PORT || 5000;
