@@ -25,14 +25,13 @@ async function getQuestions() {}
 
 const findInCollection = async function(collection, fields) {
   if (!fields) fields = {};
-  var myPromise = () => {
-    return new Promise((resolve, reject) => {
-      collection.find(fields).toArray(function(err, data) {
-        err ? reject(err) : resolve(data);
-      });
-    });
-  };
-  return await myPromise();
+
+  try {
+    return await collection.find(fields).toArray();
+  } catch (error) {
+    throw error;
+  }
 };
 
-getUsers({ username: "lisa90", name: "enres" });
+//getUsers({ username: "lisa90" });
+getUsers();
