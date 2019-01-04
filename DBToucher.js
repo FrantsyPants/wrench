@@ -10,28 +10,22 @@ async function getUsers(fields) {
   client.connect(async function(err) {
     assert.equal(null, err);
 
-    console.log("Connected successfully to server");
     const db = client.db(dbName);
 
-    var results = await findInCollection(db.collection("users"), fields);
+    let results;
+
+    try {
+      results = await db
+        .collection("users")
+        .find(fields)
+        .toArray();
+    } catch (error) {
+      throw error;
+    }
 
     client.close();
-    console.log(results);
     return results;
   });
 }
 
-async function getQuestions() {}
-
-const findInCollection = async function(collection, fields) {
-  if (!fields) fields = {};
-
-  try {
-    return await collection.find(fields).toArray();
-  } catch (error) {
-    throw error;
-  }
-};
-
-//getUsers({ username: "lisa90" });
-getUsers();
+getUsers({ username: "lisa90" });
