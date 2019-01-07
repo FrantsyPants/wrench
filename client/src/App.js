@@ -1,19 +1,35 @@
 import React, { Component } from "react";
-import { Button } from "reactstrap";
-import { Alert } from "reactstrap";
+import { Button, Navbar, Container, Row, Col } from "reactstrap";
+import CarSelector from "./components/car.selector";
+import TagSelector from "./components/tag.selector";
+import QuestionCreationArea from "./components/question.creation.area";
+import QuestionDisplayArea from "./components/question.display.area";
 
 class App extends Component {
   render() {
     return (
       <div>
-        <Alert color="primary">This is a primary alert — check it out!</Alert>
-        <Button color="primary">primary</Button>{" "}
-        <Button color="secondary">secondary</Button>{" "}
-        <Button color="success">success</Button>{" "}
-        <Button color="info">info</Button>{" "}
-        <Button color="warning">warning</Button>{" "}
-        <Button color="danger">danger</Button>{" "}
-        <Button color="link">link</Button>
+        <Navbar color="secondary">
+          <Button color="primary">primary</Button> NavBar!
+        </Navbar>
+        <Container fluid={true}>
+          <Row fluid={true}>
+            <Col>
+              <Row>
+                <CarSelector />
+              </Row>
+              <Row>
+                <TagSelector />
+              </Row>
+              <Row>
+                <QuestionCreationArea />
+              </Row>
+            </Col>
+            <Col>
+              <QuestionDisplayArea />
+            </Col>
+          </Row>
+        </Container>
       </div>
     );
   }
