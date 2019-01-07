@@ -1,5 +1,4 @@
 const MongoClient = require("mongodb").MongoClient;
-const assert = require("assert");
 
 const connectionString =
   "mongodb+srv://admin:letmein_1997@testdb-lfygc.gcp.mongodb.net/test?retryWrites=true"; //to cluster
