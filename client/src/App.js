@@ -16,13 +16,19 @@ class App extends Component {
           <Row fluid={true}>
             <Col>
               <Row>
-                <CarSelector />
+                <Col>
+                  <CarSelector />
+                </Col>
               </Row>
               <Row>
-                <TagSelector />
+                <Col>
+                  <TagSelector />
+                </Col>
               </Row>
               <Row>
-                <QuestionCreationArea />
+                <Col>
+                  <QuestionCreationArea />
+                </Col>
               </Row>
             </Col>
             <Col>
