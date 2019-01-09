@@ -4,6 +4,23 @@ const connectionString =
   "mongodb+srv://admin:letmein_1997@testdb-lfygc.gcp.mongodb.net/test?retryWrites=true"; //to cluster
 const dbName = "wrench";
 
+async function createQuestion(question) {
+  await createInCollection("questions", question);
+}
+
+//question id must be  an objectId
+async function createAnswer(answer, questionId) {
+  await updateInCollection(
+    "questions",
+    { _id: questionId },
+    { $push: { answers: answer } }
+  );
+}
+
+async function createComment(comment, questionId, answerId) {
+  await updateInCollection("questions");
+}
+
 async function connectToDB() {
   try {
     return await MongoClient.connect(
