@@ -1,25 +1,59 @@
 const MongoClient = require("mongodb").MongoClient;
+const ObjectID = require("mongodb").ObjectID;
 
 const connectionString =
   "mongodb+srv://admin:letmein_1997@testdb-lfygc.gcp.mongodb.net/test?retryWrites=true"; //to cluster
 const dbName = "wrench";
 
 async function createQuestion(question) {
-  await createInCollection("questions", question);
+  question._id = new ObjectID();
+  queries = [];
+  queries.push(createInCollection("questions", question));
+  queries.push(
+    updateInCollection(
+      "users",
+      { _id: question.user_id },
+      { $push: { questions: question._id } }
+    )
+  );
+  question.tagNames.forEach(async element => {
+    queries.push(
+      updateInCollection(
+        "tags",
+        { name: element },
+        { $push: { questions: question._id } }
+      )
+    );
+  });
+  await Promise.all(queries);
+}
+
+async function deleteQuestion(question) {
+  queries = [];
+  queries.push(deleteInCollection("questions", { _id: question._id }));
+  queries.push(
+    updateInCollection(
+      "users",
+      { _id: question.user_id },
+      { $pull: { questions: question._id } }
+    )
+  );
+  question.tagNames.forEach(async element => {
+    queries.push(
+      updateInCollection(
+        "tags",
+        { name: element },
+        { $pull: { questions: question._id } }
+      )
+    );
+  });
+  await Promise.all(queries);
 }
 
 //question id must be  an objectId
-async function createAnswer(answer, questionId) {
-  await updateInCollection(
-    "questions",
-    { _id: questionId },
-    { $push: { answers: answer } }
-  );
-}
+async function createAnswer(answer, questionId) {}
 
-async function createComment(comment, questionId, answerId) {
-  await updateInCollection("questions");
-}
+async function createComment(comment, questionId, answerId) {}
 
 async function connectToDB() {
   try {
@@ -100,7 +134,7 @@ async function deleteInCollection(collectionName, query) {
 }
 
 //runs through each crud operation
-async function testing() {
+async function crudTesting() {
   let user = {
     firstname: "Jake",
     lastname: "Heckley",
@@ -112,40 +146,71 @@ async function testing() {
     questionsAnswered: [],
     questionsCommented: []
   };
-
   console.log("creating a new user...\n");
   await createInCollection("users", user);
-
-  result = await findInCollection("users", { username: "TheHeckler" });
+  let result = await findInCollection("users", { username: "TheHeckler" });
   console.log(result);
-
   console.log("\nupdating Jakes username to be testing...\n");
   await updateInCollection(
     "users",
     { username: "TheHeckler" },
     { $set: { username: "testing" } }
   );
-
   result = await findInCollection("users", { username: "testing" });
   console.log(result);
-
   console.log("\nChanging the name back...\n");
   await updateInCollection(
     "users",
     { username: "testing" },
     { $set: { username: "TheHeckler" } }
   );
-
   result = await findInCollection("users", { username: "TheHeckler" });
   console.log(result);
-
   console.log("\ndeleting jake from the database...\n");
   await deleteInCollection("users", { username: "TheHeckler" });
   console.log("done!\n");
-
   console.log("trying to find jake in the database...\n");
   result = await findInCollection("users", { username: "TheHeckler" });
   console.log("result:", result);
 }
 
-testing();
+async function createAndDeleteQuestionTesting() {
+  let question = {
+    user_id: ObjectID("5c2d80941c9d4400009c4b0a"),
+    username: "lisa90",
+    text: "testing testing 123",
+    tagNames: ["battery", "racecar"],
+    answers: []
+  };
+
+  console.log("\nCreating Question...");
+  await createQuestion(question);
+
+  let result = await findInCollection("questions", {
+    text: "testing testing 123"
+  });
+
+  question = result[0];
+  console.log("\nNew Question:", question);
+
+  console.log("\nFinding tags...");
+  let tags = await findInCollection("tags", {});
+  console.log("\ntags:", tags);
+
+  console.log("\nfinding user who asked question...");
+  let lisa = await findInCollection("users", { username: question.username });
+  console.log("\nuser:", lisa);
+
+  console.log("\ndeleting question...");
+  await deleteQuestion(question);
+
+  console.log("\nFinding tags...");
+  tags = await findInCollection("tags", {});
+  console.log("\ntags:", tags);
+
+  console.log("\nfinding user who asked question...");
+  lisa = await findInCollection("users", { username: question.username });
+  console.log("\nuser:", lisa);
+}
+
+createAndDeleteQuestionTesting();
