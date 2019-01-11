@@ -1,5 +1,6 @@
 const MongoClient = require("mongodb").MongoClient;
 const ObjectID = require("mongodb").ObjectID;
+const assert = require("assert");
 
 const connectionString =
   "mongodb+srv://admin:letmein_1997@testdb-lfygc.gcp.mongodb.net/test?retryWrites=true"; //to cluster
@@ -7,21 +8,22 @@ const dbName = "wrench";
 
 async function createQuestion(question) {
   question._id = new ObjectID();
-  queries = [];
-  queries.push(createInCollection("questions", question));
+  await createInCollection("questions", question);
+
+  let queries = [];
   queries.push(
     updateInCollection(
       "users",
       { _id: question.user_id },
-      { $push: { questions: question._id } }
+      { $addToSet: { questions: question._id } }
     )
   );
-  question.tagNames.forEach(async element => {
+  question.tagNames.forEach(element => {
     queries.push(
       updateInCollection(
         "tags",
         { name: element },
-        { $push: { questions: question._id } }
+        { $addToSet: { questions: question._id } }
       )
     );
   });
@@ -29,8 +31,11 @@ async function createQuestion(question) {
 }
 
 async function deleteQuestion(question) {
-  queries = [];
-  queries.push(deleteInCollection("questions", { _id: question._id }));
+  assert(ObjectID.isValid(question._id));
+
+  await deleteInCollection("questions", { _id: question._id });
+
+  let queries = [];
   queries.push(
     updateInCollection(
       "users",
@@ -38,7 +43,7 @@ async function deleteQuestion(question) {
       { $pull: { questions: question._id } }
     )
   );
-  question.tagNames.forEach(async element => {
+  question.tagNames.forEach(element => {
     queries.push(
       updateInCollection(
         "tags",
@@ -51,9 +56,128 @@ async function deleteQuestion(question) {
 }
 
 //question id must be  an objectId
-async function createAnswer(answer, questionId) {}
+async function createAnswer(answer) {
+  assert(ObjectID.isValid(answer.question_id));
 
-async function createComment(comment, questionId, answerId) {}
+  answer._id = new ObjectID();
+  answer.voteCount = 0;
+  answer.verified = false;
+  await createInCollection("answers", answer);
+
+  let queries = [];
+  queries.push(
+    updateInCollection(
+      "questions",
+      { _id: answer.question_id },
+      { $push: { answers: answer._id } }
+    )
+  );
+  queries.push(
+    updateInCollection(
+      "users",
+      { _id: answer.user_id },
+      { $push: { answers: answer._id } }
+    )
+  );
+  await Promise.all(queries);
+}
+
+async function deleteAnswer(answer) {
+  assert(ObjectID.isValid(answer.question_id));
+  assert(ObjectID.isValid(answer._id));
+
+  //Delete Comments within the answer before deleting the answer
+  let queries = [];
+
+  //Make queries to find each comment to get the full object
+  //which is needed so it comments and there references can
+  //be deleted with deleteComment(comment)
+  answer.comments.forEach(commentID => {
+    queries.push(findInCollection("comments", { _id: commentID }));
+  });
+
+  //wait for all of the comments (Each comment is still wrapped in an array)
+  commentsWrapped = await Promise.all(queries);
+
+  //Since findByCollection returns an array just look at the first
+  //and only element. It's the only element because were searching
+  //by objectID.
+  const comments = commentsWrapped.map(element => {
+    return element[0];
+  });
+
+  //reset queries array
+  queries = [];
+
+  //make "queries" to delete every comment and all it's references
+  comments.forEach(comment => {
+    queries.push(deleteComment(comment));
+  });
+
+  //wait for all the comments to delete
+  await Promise.all(queries);
+
+  //Delete the answer
+  await deleteInCollection("answers", { _id: answer._id });
+
+  //Delete the answers reference in its question.
+  queries.push(
+    updateInCollection(
+      "questions",
+      { _id: answer.question_id },
+      { $pull: { answers: answer._id } }
+    )
+  );
+
+  //Delete the answers reference in the user that made it.
+  queries.push(
+    updateInCollection(
+      "users",
+      { _id: answer.user_id },
+      { $pull: { answers: answer._id } }
+    )
+  );
+
+  //Wait for all added queries to complete.
+  await Promise.all(queries);
+}
+
+async function createComment(comment) {
+  assert(ObjectID.isValid(comment.answer_id));
+
+  comment._id = new ObjectID();
+  await createInCollection("comments", comment);
+
+  await updateInCollection(
+    "answers",
+    { _id: comment.answer_id },
+    { $push: { comments: comment._id } }
+  );
+
+  await updateInCollection(
+    "users",
+    { _id: comment.user_id },
+    { $push: { comments: comment._id } } //push/addToSet ?
+  );
+}
+
+async function deleteComment(comment) {
+  console.log("answer id: ", comment.answer_id);
+  assert(ObjectID.isValid(comment.answer_id));
+  await deleteInCollection("comments", { _id: comment._id });
+
+  await updateInCollection(
+    "answers",
+    { _id: comment.answer_id },
+    { $pull: { comments: comment._id } }
+  );
+
+  await updateInCollection(
+    "users",
+    { _id: comment.user_id },
+    { $pull: { comments: comment._id } } //push/addToSet ?
+  );
+}
 
 async function connectToDB() {
   try {
@@ -213,4 +337,62 @@ async function createAndDeleteQuestionTesting() {
   console.log("\nuser:", lisa);
 }
 
-createAndDeleteQuestionTesting();
+async function createAndDeleteAnswerTesting() {
+  let newAnswer = {
+    user_id: ObjectID("5c2d82de1c9d4400009c4b0f"),
+    question_id: ObjectID("5c2eb7ed1c9d4400004a3ad9"),
+    username: "dude89C",
+    text: "testing answer",
+    voteCount: 0,
+    verified: false,
+    comments: []
+  };
+
+  console.log("\nCreating new answer...");
+  await createAnswer(newAnswer);
+
+  //grab newly created answer
+  let result = await findInCollection("answers", { text: "testing answer" });
+  newAnswer = result[0];
+  console.log("\nnew answer: ", newAnswer);
+
+  let comment = {
+    answer_id: newAnswer._id,
+    user_id: ObjectID("5c2d82591c9d4400009c4b0e"),
+    username: "drifts1ut101",
+    text: "testing comment"
+  };
+
+  //create 5 comments, each will have different objectID's
+  console.log("creating 5 comments on the new answer");
+  for (i = 0; i < 5; i++) {
+    await createComment(comment);
+  }
+
+  result = await findInCollection("answers", { text: "testing answer" });
+  newAnswer = result[0];
+  console.log("\nnew answer: ", newAnswer);
+
+  deleteAnswer(newAnswer);
+}
+
+async function createAndDeleteCommentTesting() {
+  let comment = {
+    answer_id: ObjectID("5c3558847f69c33a34ffaf74"),
+    user_id: ObjectID("5c2d82591c9d4400009c4b0e"),
+    username: "drifts1ut101",
+    text: "testing"
+  };
+
+  let results = await findInCollection("comments", {
+    text: "testing"
+  });
+  comment = results[0];
+  console.log(comment);
+
+  await deleteComment(comment);
+
+  //await createComment(comment);
+}
+
+createAndDeleteAnswerTesting();
