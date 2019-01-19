@@ -6,108 +6,271 @@ const connectionString =
   "mongodb+srv://admin:letmein_1997@testdb-lfygc.gcp.mongodb.net/test?retryWrites=true"; //to cluster
 const dbName = "wrench";
 
+async function createUser(user) {
+  user._id = new ObjectID();
+  user.questions = [];
+  user.answers = [];
+  user.comments = [];
+  user.rank = 0;
+
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
+  try {
+    await db.collection("users").insertOne(user);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
+}
+
+async function getArrayOfDocumentsFromIds(db, collectionName, ids) {
+  let queries = [];
+
+  ids.forEach(id => {
+    queries.push(db.collection(collectionName).findOne({ _id: id }));
+  });
+
+  try {
+    return await Promise.all(queries);
+  } catch (error) {
+    console.log(
+      "Problem grabbing documents from array of Ids, currently in grabArrayOfDocumentsFromIds. Here's the error: ",
+      error
+    );
+    throw error;
+  }
+}
+
+async function deleteUser(user) {
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
+  //delete user
+  await db.collection("users").deleteOne({ _id: user._id });
+
+  //Start with comments, First get a list of documents from the users list of ids
+  let comments = await getArrayOfDocumentsFromIds(
+    db,
+    "comments",
+    user.comments
+  );
+  let commentQueries = [];
+
+  //Make a query to delete every comment
+  comments.forEach(comment => {
+    commentQueries.push(deleteComment(comment));
+  });
+
+  //wait for all comments to be deleted
+  console.log("deleting comments");
+  try {
+    await Promise.all(commentQueries);
+  } catch (error) {
+    throw error;
+  }
+
+  //Now answers, get a list of documents from the users list of ids
+  let answers = await getArrayOfDocumentsFromIds(db, "answers", user.answers);
+  let answerQueries = [];
+
+  //make "queries to delete answers"
+  answers.forEach(answer => {
+    answerQueries.push(deleteAnswer(answer));
+  });
+
+  //wait to delete answers
+  console.log("deleting answers");
+  try {
+    await Promise.all(answerQueries);
+  } catch (error) {
+    throw error;
+  }
+
+  //Now questions, start by grabbing all of the documents from the users list of ids
+  let questions = await getArrayOfDocumentsFromIds(
+    db,
+    "questions",
+    user.questions
+  );
+  let questionQueries = [];
+
+  questions.forEach(question => {
+    questionQueries.push(deleteQuestion(question));
+  });
+
+  //wait for questions to be deleted
+  console.log("deleting questions");
+  try {
+    await Promise.all(questionQueries);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
+}
+
 async function createQuestion(question) {
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
   question._id = new ObjectID();
-  await createInCollection("questions", question);
+
+  try {
+    await db.collection("questions").insertOne(question);
+  } catch (error) {
+    throw error;
+  }
 
   let queries = [];
+
   queries.push(
-    updateInCollection(
-      "users",
-      { _id: question.user_id },
-      { $addToSet: { questions: question._id } }
-    )
-  );
-  question.tagNames.forEach(element => {
-    queries.push(
-      updateInCollection(
-        "tags",
-        { name: element },
+    db
+      .collection("users")
+      .updateOne(
+        { _id: question.user_id },
         { $addToSet: { questions: question._id } }
       )
+  );
+
+  question.tagNames.forEach(tag => {
+    queries.push(
+      db
+        .collection("tags")
+        .updateOne({ name: tag }, { $addToSet: { questions: question._id } })
     );
   });
-  await Promise.all(queries);
+
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+  client.close();
 }
 
 async function deleteQuestion(question) {
   assert(ObjectID.isValid(question._id));
 
-  await deleteInCollection("questions", { _id: question._id });
+  const client = await connectToDB();
+  const db = client.db(dbName);
 
-  let queries = [];
-  queries.push(
-    updateInCollection(
-      "users",
-      { _id: question.user_id },
-      { $pull: { questions: question._id } }
-    )
+  let answers = await getArrayOfDocumentsFromIds(
+    db,
+    "answers",
+    question.answers
   );
-  question.tagNames.forEach(element => {
-    queries.push(
-      updateInCollection(
-        "tags",
-        { name: element },
+
+  //empty query array
+  let queries = [];
+
+  //make "queries" to delete all answers
+  answers.forEach(answer => {
+    queries.push(deleteAnswer(answer));
+  });
+
+  //wait for answers to be deleted
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+
+  //delete the question
+  try {
+    db.collection("questions").deleteOne({ _id: question._id });
+  } catch (error) {
+    throw error;
+  }
+
+  //empty queries array
+  queries = [];
+
+  queries.push(
+    db
+      .collection("users")
+      .updateOne(
+        { _id: question.user_id },
         { $pull: { questions: question._id } }
       )
+  );
+
+  question.tagNames.forEach(tag => {
+    queries.push(
+      db
+        .collection("tags")
+        .updateOne({ name: tag }, { $pull: { questions: question._id } })
     );
   });
-  await Promise.all(queries);
+
+  //wait for references to be deleted from user and tags
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
 }
 
 //question id must be  an objectId
 async function createAnswer(answer) {
   assert(ObjectID.isValid(answer.question_id));
 
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
   answer._id = new ObjectID();
   answer.voteCount = 0;
   answer.verified = false;
-  await createInCollection("answers", answer);
+
+  try {
+    await db.collection("answers").insertOne(answer);
+  } catch (error) {
+    throw error;
+  }
 
   let queries = [];
+
   queries.push(
-    updateInCollection(
-      "questions",
-      { _id: answer.question_id },
-      { $push: { answers: answer._id } }
-    )
+    db
+      .collection("questions")
+      .updateOne(
+        { _id: answer.question_id },
+        { $push: { answers: answer._id } }
+      )
   );
+
   queries.push(
-    updateInCollection(
-      "users",
-      { _id: answer.user_id },
-      { $push: { answers: answer._id } }
-    )
+    db
+      .collection("users")
+      .updateOne({ _id: answer.user_id }, { $push: { answers: answer._id } })
   );
-  await Promise.all(queries);
+
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
 }
 
 async function deleteAnswer(answer) {
   assert(ObjectID.isValid(answer.question_id));
   assert(ObjectID.isValid(answer._id));
 
-  //Delete Comments within the answer before deleting the answer
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
+  let comments = await getArrayOfDocumentsFromIds(
+    db,
+    "comments",
+    answer.comments
+  );
+
   let queries = [];
-
-  //Make queries to find each comment to get the full object
-  //which is needed so it comments and there references can
-  //be deleted with deleteComment(comment)
-  answer.comments.forEach(commentID => {
-    queries.push(findInCollection("comments", { _id: commentID }));
-  });
-
-  //wait for all of the comments (Each comment is still wrapped in an array)
-  commentsWrapped = await Promise.all(queries);
-
-  //Since findByCollection returns an array just look at the first
-  //and only element. It's the only element because were searching
-  //by objectID.
-  const comments = commentsWrapped.map(element => {
-    return element[0];
-  });
-
-  //reset queries array
-  queries = [];
 
   //make "queries" to delete every comment and all it's references
   comments.forEach(comment => {
@@ -118,65 +281,115 @@ async function deleteAnswer(answer) {
   await Promise.all(queries);
 
   //Delete the answer
-  await deleteInCollection("answers", { _id: answer._id });
+  try {
+    await db.collection("answers").deleteOne({ _id: answer._id });
+  } catch (error) {
+    throw errow;
+  }
 
   //Delete the answers reference in its question.
   queries.push(
-    updateInCollection(
-      "questions",
-      { _id: answer.question_id },
-      { $pull: { answers: answer._id } }
-    )
+    db
+      .collection("questions")
+      .updateOne(
+        { _id: answer.question_id },
+        { $pull: { answers: answer._id } }
+      )
   );
 
   //Delete the answers reference in the user that made it.
   queries.push(
-    updateInCollection(
-      "users",
-      { _id: answer.user_id },
-      { $pull: { answers: answer._id } }
-    )
+    db
+      .collection("users")
+      .updateOne({ _id: answer.user_id }, { $pull: { answers: answer._id } })
   );
 
   //Wait for all added queries to complete.
-  await Promise.all(queries);
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
 }
 
 async function createComment(comment) {
   assert(ObjectID.isValid(comment.answer_id));
 
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
   comment._id = new ObjectID();
-  await createInCollection("comments", comment);
 
-  await updateInCollection(
-    "answers",
-    { _id: comment.answer_id },
-    { $push: { comments: comment._id } }
+  try {
+    await db.collection("comments").insertOne(comment);
+  } catch (error) {
+    throw error;
+  }
+
+  let queries = [];
+
+  queries.push(
+    db
+      .collection("answers")
+      .updateOne(
+        { _id: comment.answer_id },
+        { $push: { comments: comment._id } }
+      )
   );
 
-  await updateInCollection(
-    "users",
-    { _id: comment.user_id },
-    { $push: { comments: comment._id } } //push/addToSet ?
+  queries.push(
+    db
+      .collection("users")
+      .updateOne({ _id: comment.user_id }, { $push: { comments: comment._id } })
   );
+
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
 }
 
 async function deleteComment(comment) {
-  console.log("answer id: ", comment.answer_id);
   assert(ObjectID.isValid(comment.answer_id));
-  await deleteInCollection("comments", { _id: comment._id });
 
-  await updateInCollection(
-    "answers",
-    { _id: comment.answer_id },
-    { $pull: { comments: comment._id } }
+  const client = await connectToDB();
+  const db = client.db(dbName);
+
+  try {
+    await db.collection("comments").deleteOne({ _id: comment._id });
+  } catch (error) {
+    throw error;
+  }
+
+  let queries = [];
+
+  queries.push(
+    db
+      .collection("answers")
+      .updateOne(
+        { _id: comment.answer_id },
+        { $pull: { comments: comment._id } }
+      )
   );
 
-  await updateInCollection(
-    "users",
-    { _id: comment.user_id },
-    { $pull: { comments: comment._id } } //push/addToSet ?
+  queries.push(
+    db
+      .collection("users")
+      .updateOne({ _id: comment.user_id }, { $pull: { comments: comment._id } })
   );
+
+  try {
+    await Promise.all(queries);
+  } catch (error) {
+    throw error;
+  }
+
+  client.close();
 }
 
 async function connectToDB() {
@@ -298,43 +511,24 @@ async function crudTesting() {
   console.log("result:", result);
 }
 
-async function createAndDeleteQuestionTesting() {
-  let question = {
-    user_id: ObjectID("5c2d80941c9d4400009c4b0a"),
-    username: "lisa90",
-    text: "testing testing 123",
-    tagNames: ["battery", "racecar"],
-    answers: []
+async function createAndDeleteCommentTesting() {
+  let comment = {
+    answer_id: ObjectID("5c3558847f69c33a34ffaf74"),
+    user_id: ObjectID("5c2d82591c9d4400009c4b0e"),
+    username: "drifts1ut101",
+    text: "testing"
   };
 
-  console.log("\nCreating Question...");
-  await createQuestion(question);
+  await createComment(comment);
 
-  let result = await findInCollection("questions", {
-    text: "testing testing 123"
+  let results = await findInCollection("comments", {
+    text: "testing"
   });
 
-  question = result[0];
-  console.log("\nNew Question:", question);
+  comment = results[0];
+  console.log(comment);
 
-  console.log("\nFinding tags...");
-  let tags = await findInCollection("tags", {});
-  console.log("\ntags:", tags);
-
-  console.log("\nfinding user who asked question...");
-  let lisa = await findInCollection("users", { username: question.username });
-  console.log("\nuser:", lisa);
-
-  console.log("\ndeleting question...");
-  await deleteQuestion(question);
-
-  console.log("\nFinding tags...");
-  tags = await findInCollection("tags", {});
-  console.log("\ntags:", tags);
-
-  console.log("\nfinding user who asked question...");
-  lisa = await findInCollection("users", { username: question.username });
-  console.log("\nuser:", lisa);
+  await deleteComment(comment);
 }
 
 async function createAndDeleteAnswerTesting() {
@@ -348,8 +542,16 @@ async function createAndDeleteAnswerTesting() {
     comments: []
   };
 
+  // let result = await findInCollection("questions", { username: "lisa90" });
+  // question = result[0];
+  // console.log("\nquestion: ", question);
+
   console.log("\nCreating new answer...");
   await createAnswer(newAnswer);
+
+  // result = await findInCollection("questions", { username: "lisa90" });
+  // question = result[0];
+  // console.log("\nquestion: ", question);
 
   //grab newly created answer
   let result = await findInCollection("answers", { text: "testing answer" });
@@ -369,30 +571,161 @@ async function createAndDeleteAnswerTesting() {
     await createComment(comment);
   }
 
+  // result = await findInCollection("questions", { username: "lisa90" });
+  // question = result[0];
+  // console.log("\nquestion: ", question);
+
   result = await findInCollection("answers", { text: "testing answer" });
   newAnswer = result[0];
   console.log("\nnew answer: ", newAnswer);
 
-  deleteAnswer(newAnswer);
+  await deleteAnswer(newAnswer);
+
+  // result = await findInCollection("questions", { username: "lisa90" });
+  // question = result[0];
+  // console.log("\nquestion: ", question);
 }
 
-async function createAndDeleteCommentTesting() {
-  let comment = {
-    answer_id: ObjectID("5c3558847f69c33a34ffaf74"),
-    user_id: ObjectID("5c2d82591c9d4400009c4b0e"),
-    username: "drifts1ut101",
-    text: "testing"
+async function createAndDeleteQuestionTesting() {
+  let question = {
+    user_id: ObjectID("5c2d80941c9d4400009c4b0a"),
+    username: "lisa90",
+    text: "testing testing 123",
+    tagNames: ["battery", "racecar"],
+    answers: []
   };
 
-  let results = await findInCollection("comments", {
-    text: "testing"
+  console.log("\nCreating Question...");
+  await createQuestion(question);
+
+  let result = await findInCollection("questions", {
+    text: "testing testing 123"
   });
-  comment = results[0];
-  console.log(comment);
 
-  await deleteComment(comment);
+  question = result[0];
 
-  //await createComment(comment);
+  let answer = {
+    user_id: ObjectID("5c2d82de1c9d4400009c4b0f"),
+    question_id: question._id,
+    username: "dude89C",
+    text: "testing answer",
+    voteCount: 0,
+    verified: false,
+    comments: []
+  };
+
+  console.log("creating answer...\n");
+  createAnswer(answer);
+
+  result = await findInCollection("answers", {
+    text: "testing answer"
+  });
+
+  answer = result[0];
+
+  let comment = {
+    answer_id: answer._id,
+    user_id: ObjectID("5c2d82591c9d4400009c4b0e"),
+    username: "drifts1ut101",
+    text: "testing comment"
+  };
+
+  console.log("creating 5 comments on the new answer");
+  for (i = 0; i < 5; i++) {
+    await createComment(comment);
+  }
+
+  result = await findInCollection("questions", {
+    text: "testing testing 123"
+  });
+
+  question = result[0];
+  console.log("\nQuestion:", question);
+
+  console.log("\ndeleting question...");
+  await deleteQuestion(question);
 }
 
-createAndDeleteAnswerTesting();
+async function createAndDeleteUserTesting() {
+  user = {
+    username: "tester1",
+    firstname: "test",
+    lastname: "user",
+    email: "testuser@test.test",
+    password: "encrypted string"
+  };
+
+  await createUser(user);
+
+  let result = await findInCollection("users", { firstname: "test" });
+
+  user = result[0];
+
+  let question = {
+    user_id: user._id,
+    username: "tester1",
+    text: "testing testing 123",
+    tagNames: ["battery", "racecar"],
+    answers: []
+  };
+
+  await createQuestion(question);
+  await createQuestion(question);
+
+  result = await findInCollection("users", { firstname: "test" });
+
+  user = result[0];
+
+  result = await findInCollection("questions", {
+    text: "testing testing 123"
+  });
+
+  question = result[0];
+
+  let answer = {
+    user_id: user._id,
+    question_id: question._id,
+    username: "tester1",
+    text: "testing",
+    voteCount: 0,
+    verified: false,
+    comments: []
+  };
+
+  await createAnswer(answer);
+  await createAnswer(answer);
+
+  //create a copy of answer
+  let answerDifferentQuestion = JSON.parse(JSON.stringify(answer));
+  answerDifferentQuestion.question_id = ObjectID("5c2eb7ed1c9d4400004a3ad9");
+  answerDifferentQuestion.user_id = ObjectID(answerDifferentQuestion.user_id);
+  console.log("answer #2", answerDifferentQuestion);
+
+  await createAnswer(answerDifferentQuestion);
+  await createAnswer(answerDifferentQuestion);
+
+  result = await findInCollection("answers", {
+    text: "testing"
+  });
+
+  answer = result[0];
+
+  let comment = {
+    answer_id: answer._id,
+    user_id: user._id,
+    username: "tester1",
+    text: "testing user delete"
+  };
+
+  await createComment(comment);
+  await createComment(comment);
+
+  result = await findInCollection("users", { firstname: "test" });
+
+  user = result[0];
+  console.log("User", result);
+
+  await deleteUser(user);
+}
+
+createAndDeleteUserTesting();
