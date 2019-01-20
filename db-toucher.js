@@ -1,4 +1,5 @@
 const MongoClient = require("mongodb").MongoClient;
+let ObjectId = require("mongodb").ObjectID;
 
 const connectionString =
   "mongodb+srv://admin:letmein_1997@testdb-lfygc.gcp.mongodb.net/test?retryWrites=true"; //to cluster
@@ -130,5 +131,62 @@ async function testing() {
   result = await findInCollection("users", { username: "TheHeckler" });
   console.log("result:", result);
 }
+//testing();
 
-testing();
+async function getQuestionById(id) {
+  return await findInCollection("questions", { _id: ObjectId(id) });
+}
+
+async function getQuestionsByTags(tag) {
+  return await findInCollection("questions", { tagNames: tag });
+}
+
+async function getUserById(userId) {
+  return await findInCollection("users", { _id: ObjectId(userId) });
+}
+
+async function getUserByUsername(username) {
+  return await findInCollection("users", { username: username });
+}
+
+async function testingUpdate() {
+  let questionById = await getQuestionById("5c2eb7ed1c9d4400004a3ad9");
+  //console.log(questionById);
+  let questionByTags = await getQuestionsByTags("battery");
+  //console.log(questionByTags);
+  let userById = await getUserById("5c2d82591c9d4400009c4b0e");
+  console.log(userById);
+  let userByUsername = await getUserByUsername("picklesdoffle");
+  console.log(userByUsername);
+
+  // let demoQuestion = {
+  //   username: "lisa90",
+  //   text: "shift knob",
+  //   tagNames: [],
+  //   date: 6642450017443381249,
+  //   answers: []
+  // };
+  //   console.log("\ncreating a new question...\n");
+  //   await createInCollection("questions", demoQuestion);
+
+  //   console.log("\nHere is the result before change\n");
+
+  //   result = await findInCollection("questions", { text: "shift knob" });
+  //   console.log(result);
+
+  //   console.log("\nHere is the result after change\n");
+  //   await updateInCollection(
+  //     "questions",
+  //     { text: "shift knob" },
+  //     { $set: { text: "How to change shift knob?" } }
+  //   );
+  //   result = await findInCollection("questions", {
+  //     text: "How to change shift knob?"
+  //   });
+  //   console.log(result);
+
+  //   console.log("\ndeleting testQuestion from the database...\n");
+  //   await deleteInCollection("questions", { text: "How to change shift knob?" });
+  //   console.log("done!\n");
+}
+testingUpdate();
