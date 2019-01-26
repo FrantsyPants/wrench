@@ -59,11 +59,11 @@ class db_toucher {
 
     //Make a query to delete every comment
     comments.forEach(comment => {
-      commentQueries.push(deleteComment(comment));
+      commentQueries.push(this.deleteComment(comment));
     });
 
     //wait for all comments to be deleted
-    console.log("deleting comments");
+    //console.log("deleting comments");
     try {
       await Promise.all(commentQueries);
     } catch (error) {
@@ -80,11 +80,11 @@ class db_toucher {
 
     //make "queries to delete answers"
     answers.forEach(answer => {
-      answerQueries.push(deleteAnswer(answer));
+      answerQueries.push(this.deleteAnswer(answer));
     });
 
     //wait to delete answers
-    console.log("deleting answers");
+    //console.log("deleting answers");
     try {
       await Promise.all(answerQueries);
     } catch (error) {
@@ -100,11 +100,11 @@ class db_toucher {
     let questionQueries = [];
 
     questions.forEach(question => {
-      questionQueries.push(deleteQuestion(question));
+      questionQueries.push(this.deleteQuestion(question));
     });
 
     //wait for questions to be deleted
-    console.log("deleting questions");
+    //console.log("deleting questions");
     try {
       await Promise.all(questionQueries);
     } catch (error) {
@@ -112,6 +112,27 @@ class db_toucher {
     }
 
     client.close();
+    console.log("done deleting ", user.username);
+  }
+
+  async getAllUsers() {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+
+    let users;
+
+    try {
+      users = await db
+        .collection("users")
+        .find({})
+        .toArray();
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    client.close();
+    return users;
   }
 
   async createQuestion(question) {
@@ -182,7 +203,7 @@ class db_toucher {
 
     //make "queries" to delete all answers
     answers.forEach(answer => {
-      queries.push(deleteAnswer(answer));
+      queries.push(this.deleteAnswer(answer));
     });
 
     //wait for answers to be deleted
@@ -229,8 +250,8 @@ class db_toucher {
     client.close();
   }
 
-  //question id must be  an objectId
   async createAnswer(answer) {
+    //question id must be  an objectId
     assert(ObjectID.isValid(answer.question_id));
 
     const client = await this._connectToDB();
@@ -298,7 +319,7 @@ class db_toucher {
 
     //make "queries" to delete every comment and all it's references
     comments.forEach(comment => {
-      queries.push(deleteComment(comment));
+      queries.push(this.deleteComment(comment));
     });
 
     //wait for all the comments to delete
@@ -436,6 +457,85 @@ class db_toucher {
     client.close();
   }
 
+  async createTag(tag) {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+
+    tag._id = new ObjectID();
+
+    try {
+      await db.collection("tags").insertOne(tag);
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    let newlyAddedTag;
+
+    try {
+      newlyAddedTag = await db.collection("tags").findOne({ _id: tag._id });
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    client.close();
+    return newlyAddedTag;
+  }
+
+  async deleteTag(tag) {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+
+    //delete the tag itself
+    try {
+      await db.collection("tags").deleteOne({ _id: tag._id });
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    let queries = [];
+
+    //make queries to delete tag from every question its referenced by
+    tag.questions.forEach(questionId => {
+      queries.push(
+        db
+          .collection("questions")
+          .updateOne({ _id: questionId }, { $pull: { tags: tag.name } })
+      );
+    });
+
+    try {
+      await Promise.all(queries);
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    client.close();
+  }
+
+  async getAllTags() {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+
+    let tags;
+
+    try {
+      tags = await db
+        .collection("tags")
+        .find({})
+        .toArray();
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    client.close();
+    return tags;
+  }
+
   async _getArrayOfDocumentsFromIds(db, collectionName, ids) {
     let queries = [];
 
@@ -465,17 +565,5 @@ class db_toucher {
     }
   }
 }
-
-// function trial() {
-//   db_toucher.createUser({
-//     username: "tester1",
-//     firstname: "test",
-//     lastname: "user",
-//     email: "testuser@test.test",
-//     password: "encrypted string"
-//   });
-// }
-
-// trial();
 
 module.exports = db_toucher;

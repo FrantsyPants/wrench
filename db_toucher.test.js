@@ -1,21 +1,91 @@
+const MongoClient = require("mongodb").MongoClient;
 let db_toucher = require("./db_toucher");
 
 //https://jestjs.io/docs/en/setup-teardown
 //https://jestjs.io/docs/en/tutorial-async
 
-it("creates a user", async () => {
-  expect.assertions(1);
-  let user = {
+async function setupDB() {
+  const toucher = new db_toucher("wrench_test");
+  let user1 = {
     username: "tester1",
+    firstname: "test",
+    email: "testuser@test.test",
+    password: "encrypted string"
+  };
+  let user2 = {
+    username: "tester2",
     firstname: "test",
     lastname: "user",
     email: "testuser@test.test",
     password: "encrypted string"
   };
+  let user3 = {
+    username: "tester3",
+    firstname: "test",
+    lastname: "user",
+    email: "testuser@test.test",
+    password: "encrypted string"
+  };
+
+  console.log("Creating users");
+  let newUsersArray = await Promise.all([
+    toucher.createUser(user1),
+    toucher.createUser(user2),
+    toucher.createUser(user3)
+  ]);
+
+  user1 = newUsersArray[0];
+  user2 = newUsersArray[1];
+  user2 = newUsersArray[2];
+
+  console.log("creating tags");
+  await Promise.all([
+    toucher.createTag({ name: "battery", questions: [] }),
+    toucher.createTag({ name: "racecar", questions: [] })
+  ]);
+
+  let question = {
+    user_id: user1._id,
+    username: user1.username,
+    text: "test question",
+    tagNames: ["battery", "racecar"],
+    answers: []
+  };
+
+  console.log("creating question");
+  await toucher.createQuestion(question);
+}
+
+async function resetDB() {
   const toucher = new db_toucher("wrench_test");
-  newlyAddedUser = await toucher.createUser(user);
-  expect(newlyAddedUser.username).toBe(user.username);
-});
+  let users = await toucher.getAllUsers();
+  let tags = await toucher.getAllTags();
+
+  let queries = [];
+  users.forEach(user => {
+    queries.push(toucher.deleteUser(user));
+  });
+  tags.forEach(tag => {
+    queries.push(toucher.deleteTag(tag));
+  });
+
+  await Promise.all(queries);
+}
+
+beforeEach(async () => {
+  await setupDB();
+}, 20000);
+
+afterEach(async () => {
+  await resetDB();
+}, 20000);
+
+it("has users", async () => {
+  expect.assertions(1);
+  const toucher = new db_toucher("wrench_test");
+  let users = await toucher.getAllUsers();
+  expect(users.length).toBe(3);
+}, 20000);
 
 // async function createAndDeleteCommentTesting() {
 //   let comment = {
