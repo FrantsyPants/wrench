@@ -118,19 +118,7 @@ class db_toucher {
   async getAllUsers() {
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
-
-    let users;
-
-    try {
-      users = await db
-        .collection("users")
-        .find({})
-        .toArray();
-    } catch (error) {
-      client.close();
-      throw error;
-    }
-
+    let users = await this._getAllDocumentsFromCollection(db, "users");
     client.close();
     return users;
   }
@@ -250,6 +238,14 @@ class db_toucher {
     client.close();
   }
 
+  async getAllQuestions() {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+    let questions = await this._getAllDocumentsFromCollection(db, "questions");
+    client.close();
+    return questions;
+  }
+
   async createAnswer(answer) {
     //question id must be  an objectId
     assert(ObjectID.isValid(answer.question_id));
@@ -359,6 +355,14 @@ class db_toucher {
     client.close();
   }
 
+  async getAllAnswers() {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+    let answers = await this._getAllDocumentsFromCollection(db, "answers");
+    client.close();
+    return answers;
+  }
+
   async createComment(comment) {
     assert(ObjectID.isValid(comment.answer_id));
 
@@ -457,6 +461,14 @@ class db_toucher {
     client.close();
   }
 
+  async getAllComments() {
+    const client = await this._connectToDB();
+    const db = client.db(this.dbName);
+    let comments = await this._getAllDocumentsFromCollection(db, "comments");
+    client.close();
+    return comments;
+  }
+
   async createTag(tag) {
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
@@ -519,19 +531,7 @@ class db_toucher {
   async getAllTags() {
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
-
-    let tags;
-
-    try {
-      tags = await db
-        .collection("tags")
-        .find({})
-        .toArray();
-    } catch (error) {
-      client.close();
-      throw error;
-    }
-
+    let tags = await this._getAllDocumentsFromCollection(db, "tags");
     client.close();
     return tags;
   }
@@ -552,6 +552,21 @@ class db_toucher {
       );
       throw error;
     }
+  }
+
+  async _getAllDocumentsFromCollection(db, collectionName) {
+    let docs;
+
+    try {
+      docs = await db
+        .collection(collectionName)
+        .find({})
+        .toArray();
+    } catch (error) {
+      throw error;
+    }
+
+    return docs;
   }
 
   async _connectToDB() {
