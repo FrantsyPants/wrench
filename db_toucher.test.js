@@ -36,7 +36,7 @@ async function setupDB() {
 
   user1 = newUsersArray[0];
   user2 = newUsersArray[1];
-  user2 = newUsersArray[2];
+  user3 = newUsersArray[2];
 
   console.log("creating tags");
   await Promise.all([
@@ -52,8 +52,31 @@ async function setupDB() {
     answers: []
   };
 
-  console.log("creating question");
-  await toucher.createQuestion(question);
+  console.log("Creating Question");
+  question = await toucher.createQuestion(question);
+
+  let answer = {
+    user_id: user2._id,
+    question_id: question._id,
+    username: user2.username,
+    text: "testing answer",
+    voteCount: 0,
+    verified: false,
+    comments: []
+  };
+
+  console.log("Creating Answer");
+  answer = await toucher.createAnswer(answer);
+
+  let comment = {
+    answer_id: answer._id,
+    user_id: user3._id,
+    username: user3.username,
+    text: "testing comment"
+  };
+
+  console.log("Creating Comment");
+  comment = await toucher.createComment(comment);
 }
 
 async function resetDB() {
@@ -73,18 +96,25 @@ async function resetDB() {
 }
 
 beforeEach(async () => {
+  await resetDB();
   await setupDB();
 }, 20000);
 
-afterEach(async () => {
+beforeAll(async () => {
   await resetDB();
 }, 20000);
 
-it("has users", async () => {
-  expect.assertions(1);
+it("Has correct number of users, questions, answers and comments after init", async () => {
+  expect.assertions(4);
   const toucher = new db_toucher("wrench_test");
   let users = await toucher.getAllUsers();
+  let questions = await toucher.getAllQuestions();
+  let answers = await toucher.getAllAnswers();
+  let comments = await toucher.getAllComments();
   expect(users.length).toBe(3);
+  expect(questions.length).toBe(1);
+  expect(answers.length).toBe(1);
+  expect(comments.length).toBe(1);
 }, 20000);
 
 // async function createAndDeleteCommentTesting() {

@@ -43,6 +43,11 @@ class db_toucher {
   }
 
   async deleteUser(user) {
+    console.log("deleting user", user);
+    console.log("\n\n");
+
+    assert(ObjectID.isValid(user._id));
+
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
 
@@ -59,11 +64,10 @@ class db_toucher {
 
     //Make a query to delete every comment
     comments.forEach(comment => {
-      commentQueries.push(this.deleteComment(comment));
+      if (comment) commentQueries.push(this.deleteComment(comment));
     });
 
     //wait for all comments to be deleted
-    //console.log("deleting comments");
     try {
       await Promise.all(commentQueries);
     } catch (error) {
@@ -78,13 +82,12 @@ class db_toucher {
     );
     let answerQueries = [];
 
-    //make "queries to delete answers"
+    //make "queries" to delete answers
     answers.forEach(answer => {
-      answerQueries.push(this.deleteAnswer(answer));
+      if (answer) answerQueries.push(this.deleteAnswer(answer));
     });
 
     //wait to delete answers
-    //console.log("deleting answers");
     try {
       await Promise.all(answerQueries);
     } catch (error) {
@@ -100,11 +103,10 @@ class db_toucher {
     let questionQueries = [];
 
     questions.forEach(question => {
-      questionQueries.push(this.deleteQuestion(question));
+      if (question) questionQueries.push(this.deleteQuestion(question));
     });
 
     //wait for questions to be deleted
-    //console.log("deleting questions");
     try {
       await Promise.all(questionQueries);
     } catch (error) {
@@ -175,6 +177,10 @@ class db_toucher {
   }
 
   async deleteQuestion(question) {
+    console.log("deleting question\n");
+    console.log(question);
+    console.log("\n\n");
+
     assert(ObjectID.isValid(question._id));
 
     const client = await this._connectToDB();
@@ -186,12 +192,11 @@ class db_toucher {
       question.answers
     );
 
-    //empty query array
     let queries = [];
 
     //make "queries" to delete all answers
     answers.forEach(answer => {
-      queries.push(this.deleteAnswer(answer));
+      if (answer) queries.push(this.deleteAnswer(answer));
     });
 
     //wait for answers to be deleted
@@ -201,16 +206,10 @@ class db_toucher {
       throw error;
     }
 
-    //delete the question
-    try {
-      db.collection("questions").deleteOne({ _id: question._id });
-    } catch (error) {
-      throw error;
-    }
-
     //empty queries array
     queries = [];
 
+    //Delete reference to question in user that created it
     queries.push(
       db
         .collection("users")
@@ -220,6 +219,7 @@ class db_toucher {
         )
     );
 
+    //delete reference to question in each of its tags
     question.tagNames.forEach(tag => {
       queries.push(
         db
@@ -231,6 +231,13 @@ class db_toucher {
     //wait for references to be deleted from user and tags
     try {
       await Promise.all(queries);
+    } catch (error) {
+      throw error;
+    }
+
+    //delete the question
+    try {
+      db.collection("questions").deleteOne({ _id: question._id });
     } catch (error) {
       throw error;
     }
@@ -299,6 +306,10 @@ class db_toucher {
   }
 
   async deleteAnswer(answer) {
+    console.log("deleting answer\n");
+    console.log(answer);
+    console.log("\n\n");
+
     assert(ObjectID.isValid(answer.question_id));
     assert(ObjectID.isValid(answer._id));
 
@@ -315,20 +326,19 @@ class db_toucher {
 
     //make "queries" to delete every comment and all it's references
     comments.forEach(comment => {
-      queries.push(this.deleteComment(comment));
+      if (comment) queries.push(this.deleteComment(comment));
     });
 
     //wait for all the comments to delete
-    await Promise.all(queries);
-
-    //Delete the answer
     try {
-      await db.collection("answers").deleteOne({ _id: answer._id });
+      await Promise.all(queries);
     } catch (error) {
-      throw errow;
+      client.close();
+      throw error;
     }
+    queries = [];
 
-    //Delete the answers reference in its question.
+    //Delete the reference to answer in its question.
     queries.push(
       db
         .collection("questions")
@@ -338,7 +348,7 @@ class db_toucher {
         )
     );
 
-    //Delete the answers reference in the user that made it.
+    //Delete the reference to answer in the user that made it.
     queries.push(
       db
         .collection("users")
@@ -350,6 +360,13 @@ class db_toucher {
       await Promise.all(queries);
     } catch (error) {
       throw error;
+    }
+
+    //Delete the answer
+    try {
+      await db.collection("answers").deleteOne({ _id: answer._id });
+    } catch (error) {
+      throw errow;
     }
 
     client.close();
@@ -421,19 +438,19 @@ class db_toucher {
   }
 
   async deleteComment(comment) {
+    console.log("deleting comment\n");
+    console.log(comment);
+    console.log("\n\n");
+
     assert(ObjectID.isValid(comment.answer_id));
+    assert(ObjectID.isValid(comment._id));
 
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
 
-    try {
-      await db.collection("comments").deleteOne({ _id: comment._id });
-    } catch (error) {
-      throw error;
-    }
-
     let queries = [];
 
+    //Remove references of itself from the answer its in.
     queries.push(
       db
         .collection("answers")
@@ -443,6 +460,7 @@ class db_toucher {
         )
     );
 
+    //Remove references of itself from the user it was created by
     queries.push(
       db
         .collection("users")
@@ -454,6 +472,13 @@ class db_toucher {
 
     try {
       await Promise.all(queries);
+    } catch (error) {
+      throw error;
+    }
+
+    //delete the comment itself
+    try {
+      await db.collection("comments").deleteOne({ _id: comment._id });
     } catch (error) {
       throw error;
     }
@@ -496,16 +521,10 @@ class db_toucher {
   }
 
   async deleteTag(tag) {
+    assert(ObjectID.isValid(tag._id));
+
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
-
-    //delete the tag itself
-    try {
-      await db.collection("tags").deleteOne({ _id: tag._id });
-    } catch (error) {
-      client.close();
-      throw error;
-    }
 
     let queries = [];
 
@@ -520,6 +539,14 @@ class db_toucher {
 
     try {
       await Promise.all(queries);
+    } catch (error) {
+      client.close();
+      throw error;
+    }
+
+    //delete the tag itself
+    try {
+      await db.collection("tags").deleteOne({ _id: tag._id });
     } catch (error) {
       client.close();
       throw error;
