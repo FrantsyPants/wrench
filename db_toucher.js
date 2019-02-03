@@ -18,8 +18,6 @@ class db_toucher {
     user.comments = [];
     user.rank = 0;
 
-    console.log("in create user");
-
     const client = await this._connectToDB();
     const db = client.db(this.dbName);
 
@@ -43,8 +41,8 @@ class db_toucher {
   }
 
   async deleteUser(user) {
-    console.log("deleting user", user);
-    console.log("\n\n");
+    // console.log("deleting user", user);
+    // console.log("\n\n");
 
     assert(ObjectID.isValid(user._id));
 
@@ -177,9 +175,9 @@ class db_toucher {
   }
 
   async deleteQuestion(question) {
-    console.log("deleting question\n");
-    console.log(question);
-    console.log("\n\n");
+    // console.log("deleting question\n");
+    // console.log(question);
+    // console.log("\n\n");
 
     assert(ObjectID.isValid(question._id));
 
@@ -306,9 +304,9 @@ class db_toucher {
   }
 
   async deleteAnswer(answer) {
-    console.log("deleting answer\n");
-    console.log(answer);
-    console.log("\n\n");
+    // console.log("deleting answer\n");
+    // console.log(answer);
+    // console.log("\n\n");
 
     assert(ObjectID.isValid(answer.question_id));
     assert(ObjectID.isValid(answer._id));
@@ -438,9 +436,9 @@ class db_toucher {
   }
 
   async deleteComment(comment) {
-    console.log("deleting comment\n");
-    console.log(comment);
-    console.log("\n\n");
+    // console.log("deleting comment\n");
+    // console.log(comment);
+    // console.log("\n\n");
 
     assert(ObjectID.isValid(comment.answer_id));
     assert(ObjectID.isValid(comment._id));
